@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<!-- Add lang="ar" and dir="rtl" for Arabic language support -->
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local AI </title>
+    <!-- Library to render Markdown in the bot's response -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        /* --- Sidebar is LTR, so we reset its direction --- */
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-left: 1px solid #e0e0e0; /* Changed from border-right */
+            border-right: none;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            direction: ltr; /* Keep sidebar content left-to-right */
+        }
+        
+        [dir="rtl"] .sidebar {
+             border-right: none;
+             border-left: 1px solid #e0e0e0;
+        }
+
+        .sidebar h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f4ff;
+        }
+
+        .upload-area input { display: none; }
+        .upload-icon { font-size: 40px; color: #667eea; margin-bottom: 10px; }
+        .upload-text { color: #666; font-size: 14px; }
+        .files-list { flex: 1; overflow-y: auto; }
+
+        .file-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            gap: 10px;
+        }
+
+        .file-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .file-name {
+            font-size: 14px;
+            color: #333;
+            flex: 1;
+            word-break: break-word;
+            margin-right: 5px; /* Changed from margin-left */
+        }
+
+        .delete-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+        .delete-btn:hover { background: #ff3838; }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 24px; }
+
+        .clear-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .clear-btn:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fafafa;
+        }
+
+        .message { margin-bottom: 20px; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- RTL TEXT ALIGNMENT FIXES --- */
+        .user-message { text-align: left; } /* User message appears on the left in RTL */
+        .bot-message { text-align: right; } /* Bot message appears on the right */
+
+        .message-content {
+            display: inline-block;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+            position: relative;
+            text-align: right; /* Default text align to right */
+        }
+        
+        [dir="rtl"] .user-message .message-content { text-align: right; } /* User text still reads right-to-left */
+        [dir="rtl"] .bot-message .message-content { text-align: right; }
+
+        .user-message .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .bot-message .message-content {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding-bottom: 40px;
+        }
+        
+        .bot-message .message-content ul, .bot-message .message-content ol { padding-right: 20px; } /* Changed from padding-left */
+        .bot-message .message-content li { margin-bottom: 5px; }
+        .timestamp { font-size: 11px; color: #999; margin-top: 5px; }
+
+        .input-area {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .message-input:focus { border-color: #667eea; }
+
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .send-btn:hover { transform: scale(1.05); }
+
+        .loading { display: none; text-align: center; padding: 20px; color: #667eea; }
+        .loading.active { display: block; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        .empty-state-icon { font-size: 60px; margin-bottom: 20px; }
+        
+        /* --- Styles for Hoverable Sources (COMPLETELY REVISED FOR RTL) --- */
+        .source-container {
+            position: absolute;
+            bottom: 8px;
+            left: 12px; /* Position on the left for RTL */
+            right: auto;
+            z-index: 10;
+        }
+        
+        .source-trigger {
+            width: 24px;
+            height: 24px;
+            background-color: #f0f4ff;
+            border: 1px solid #d6e0ff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #667eea;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .source-trigger:hover {
+            background-color: #667eea;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .sources {
+            display: none; 
+            position: absolute;
+            top: calc(100% + 5px); /* Position it BELOW the trigger */
+            left: 0;  /* Align to the left of the container */
+            right: auto;
+            width: 400px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            padding: 15px;
+            max-height: 250px;
+            overflow-y: auto;
+            text-align: left; /* Keep source content LTR */
+            direction: ltr;     /* Keep source content LTR */
+        }
+
+        /* The rule that reveals the sources panel on hover */
+        .source-container:hover .sources {
+            display: block;
+        }
+
+        .sources h4 {
+            font-size: 14px;
+            color: #764ba2;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .source-item {
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .source-item strong { display: block; margin-bottom: 5px; color: #333; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #667eea; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #764ba2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- The order is reversed for better visual layout in RTL: main content then sidebar -->
+        <div class="main-content">
+            <div class="header">
+                <h1>Local LM</h1>
+                <button class="clear-btn" onclick="clearHistory()">مسح السجل</button>
+            </div>
+            <div class="chat-area" id="chatArea">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🤖</div>
+                    <h3>قم برفع المستندات وابدأ بطرح الأسئلة!</h3>
+                    <p>اختر المستندات من الشريط الجانبي للبدء.</p>
+                </div>
+            </div>
+            <div class="loading" id="loading"><p>🤔 جار التفكير...</p></div>
+            <div class="input-area">
+                <input type="text" class="message-input" id="messageInput" placeholder="اسأل سؤالاً عن مستنداتك المحددة..." onkeypress="handleKeyPress(event)">
+                <button class="send-btn" onclick="sendMessage()">إرسال</button>
+            </div>
+        </div>
+        <div class="sidebar">
+            <h2>📚 المصادر</h2>
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">انقر للرفع<br>PDF, DOCX, or TXT</div>
+                <input type="file" id="fileInput" accept=".pdf,.docx,.txt" multiple>
+            </div>
+            <div class="files-list" id="filesList"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            for (let file of e.target.files) {
+                await uploadFile(file);
+            }
+            e.target.value = '';
+        });
+
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const response = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
+                const data = await response.json();
+                if (data.success) {
+                    addFileToList(data.file_id, data.filename);
+                } else {
+                    alert(data.error || 'Upload failed');
+                }
+            } catch (error) {
+                alert('Error uploading file');
+                console.error(error);
+            }
+        }
+
+        function addFileToList(fileId, filename) {
+            const filesList = document.getElementById('filesList');
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.id = `file-${fileId}`;
+            fileItem.innerHTML = `<input type="checkbox" class="file-checkbox" data-id="${fileId}" checked><span class="file-name">📄 ${filename}</span><button class="delete-btn" onclick="deleteFile('${fileId}')">Delete</button>`;
+            filesList.appendChild(fileItem);
+        }
+
+        async function deleteFile(fileId) {
+            if (!confirm('Are you sure you want to delete this file?')) return;
+            try {
+                const response = await fetch(`${API_URL}/files/${fileId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById(`file-${fileId}`).remove();
+                } else {
+                    alert(data.error || 'Error deleting file');
+                }
+            } catch (error) {
+                alert('Error deleting file');
+                console.error(error);
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const selectedFiles = document.querySelectorAll('.file-checkbox:checked');
+            const file_ids = Array.from(selectedFiles).map(cb => cb.dataset.id);
+
+            if (file_ids.length === 0) {
+                alert('Please select at least one document to chat with.');
+                return;
+            }
+
+            addMessageToChat(message, 'user');
+            input.value = '';
+            document.getElementById('loading').classList.add('active');
+
+            try {
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ message, file_ids })
+                });
+                const data = await response.json();
+                document.getElementById('loading').classList.remove('active');
+                addMessageToChat(data, 'bot');
+            } catch (error) {
+                document.getElementById('loading').classList.remove('active');
+                addMessageToChat({ response: 'Sorry, there was an error processing your request.' }, 'bot');
+                console.error(error);
+            }
+        }
+
+        function addMessageToChat(data, type) {
+            const chatArea = document.getElementById('chatArea');
+            const emptyState = chatArea.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            let messageContentHTML = '';
+
+            if (type === 'user') {
+                messageContentHTML = `<div class="message-content">${data}</div>`;
+            } else {
+                const formattedResponse = marked.parse(data.response || 'Sorry, something went wrong.');
+                let sourcesContainerHTML = '';
+
+                if (data.sources && data.sources.length > 0) {
+                    const triggerHTML = `<div class="source-trigger">!</div>`;
+                    let sourcesHTML = '<div class="sources"><h4>Sources</h4>';
+                    data.sources.forEach(source => {
+                        const sanitizedContent = source.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        sourcesHTML += `<div class="source-item"><strong>From: ${source.source}</strong>${sanitizedContent}</div>`;
+                    });
+                    sourcesHTML += '</div>';
+                    sourcesContainerHTML = `<div class="source-container">${triggerHTML}${sourcesHTML}</div>`;
+                }
+                messageContentHTML = `<div class="message-content">${formattedResponse}${sourcesContainerHTML}</div>`;
+            }
+
+            messageDiv.innerHTML = `${messageContentHTML}<div class="timestamp">${now}</div>`;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        async function clearHistory() {
+            if (!confirm('Are you sure you want to clear the chat history?')) return;
+            try {
+                await fetch(`${API_URL}/history`, { method: 'DELETE' });
+                document.getElementById('chatArea').innerHTML = `<div class="empty-state"><div class="empty-state-icon">🤖</div><h3>Chat history cleared!</h3><p>Upload new documents or ask another question.</p></div>`;
+            } catch (error) {
+                alert('Error clearing history');
+                console.error(error);
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function loadFiles() {
+            try {
+                const response = await fetch(`${API_URL}/files`);
+                const data = await response.json();
+                document.getElementById('filesList').innerHTML = '';
+                data.files.forEach(file => {
+                    addFileToList(file.id, file.filename);
+                });
+            } catch (error) {
+                console.error('Error loading files:', error);
+            }
+        }
+
+        loadFiles();
+    </script>
+</body>
+</html>
